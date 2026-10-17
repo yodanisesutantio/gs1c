@@ -1,3 +1,4 @@
+import { hasAccess } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -15,23 +16,43 @@ async function readProgress(): Promise<Progress> {
 }
 
 export async function GET() {
+  if (!(await hasAccess())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   return NextResponse.json(await readProgress());
 }
 
 export async function PUT(request: Request) {
+  if (!(await hasAccess())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
-    const body = (await request.json()) as { checked?: Record<string, boolean> };
-    if (!body.checked || typeof body.checked !== "object" || Array.isArray(body.checked)) {
-      return NextResponse.json({ error: "Invalid progress payload." }, { status: 400 });
+    const body = (await request.json()) as {
+      checked?: Record<string, boolean>;
+    };
+    if (
+      !body.checked ||
+      typeof body.checked !== "object" ||
+      Array.isArray(body.checked)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid progress payload." },
+        { status: 400 },
+      );
     }
     const checked = Object.fromEntries(
-      Object.entries(body.checked).filter(([key, value]) => typeof key === "string" && typeof value === "boolean")
+      Object.entries(body.checked).filter(
+        ([key, value]) => typeof key === "string" && typeof value === "boolean",
+      ),
     );
     const progress: Progress = { checked, updatedAt: new Date().toISOString() };
     await mkdir(path.dirname(filePath), { recursive: true });
     await writeFile(filePath, `${JSON.stringify(progress, null, 2)}\n`, "utf8");
     return NextResponse.json(progress);
   } catch {
-    return NextResponse.json({ error: "Unable to save progress." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Unable to save progress." },
+      { status: 500 },
+    );
   }
 }
